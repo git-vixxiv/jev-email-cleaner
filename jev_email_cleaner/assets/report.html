@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mailbox Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/*TOKENS*/
+/*CSS*/
+</style>
+</head>
+<body>
+<header class="bar">
+  <span class="bar__mark">jevclean</span>
+  <span class="bar__meta mono" id="meta"></span>
+  <div class="bar__actions">
+    <button class="btn btn--find" id="find" type="button">Filter <span class="kbd">/</span></button>
+    <button class="btn btn--primary" id="export" type="button" disabled>Export <span id="export-n">0</span></button>
+  </div>
+</header>
+
+<main>
+  <section class="intro">
+    <h1>Review what goes</h1>
+    <p>Each row is Jev's judgment run through your policy. Flip any row, then export your decisions and run
+      <code>jevclean decisions &lt;file&gt;</code>. Nothing changes in Gmail until <code>jevclean apply</code>.</p>
+  </section>
+
+  <dl class="tally" aria-live="polite">
+    <div class="is-delete"><dt class="mono">Delete</dt><dd id="t-delete">0</dd></div>
+    <div><dt class="mono">Undecided</dt><dd id="t-review">0</dd></div>
+    <div><dt class="mono">Keep</dt><dd id="t-keep">0</dd></div>
+    <div><dt class="mono">Archive</dt><dd id="t-archive">0</dd></div>
+    <div class="is-changed"><dt class="mono">Your changes</dt><dd id="t-changed">0</dd></div>
+  </dl>
+
+  <div class="tabs" role="tablist" aria-label="Plan buckets">
+    <button class="tab" role="tab" type="button" data-tab="delete" aria-selected="true">Suggested delete<span class="n" id="n-delete"></span></button>
+    <button class="tab" role="tab" type="button" data-tab="review" aria-selected="false">Review<span class="n" id="n-review"></span></button>
+    <button class="tab" role="tab" type="button" data-tab="keep" aria-selected="false">Keep<span class="n" id="n-keep"></span></button>
+    <button class="tab" role="tab" type="button" data-tab="senders" aria-selected="false">Senders<span class="n" id="n-senders"></span></button>
+  </div>
+
+  <div class="toolbar">
+    <label class="sr-only" for="q">Filter rows</label>
+    <input class="field" id="q" type="search" placeholder="Filter by sender, subject or topic" autocomplete="off">
+    <label class="sr-only" for="topic">Topic</label>
+    <select class="field" id="topic"><option value="">All topics</option></select>
+    <div class="toolbar__bulk" id="bulk">
+      <span class="mono" id="shown"></span>
+      <button class="btn" type="button" data-bulk="keep">Keep shown</button>
+      <button class="btn" type="button" data-bulk="delete">Delete shown</button>
+    </div>
+  </div>
+
+  <div id="panel" role="tabpanel"></div>
+</main>
+
+<footer class="foot">jevclean · judgments by TypeSafe Jev · decisions by your policy and you</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <span id="toast-msg"></span>
+  <button class="btn" id="toast-undo" type="button">Undo</button>
+</div>
+
+<script type="application/json" id="plan-data">/*DATA*/</script>
+<script>
+/*JS*/
+</script>
+</body>
+</html>

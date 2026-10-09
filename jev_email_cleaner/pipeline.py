@@ -8,9 +8,9 @@ from collections import defaultdict
 from datetime import datetime
 
 from .config import Config
-from .email_record import EmailRecord, parse_message, recipients
+from .email_record import EmailRecord, parse_connector_message, parse_message, recipients
 from .judge import judge_all, question_hash
-from .policy import DELETE, Decision, decide
+from .policy import DELETE, KEEP, Decision, decide
 from .store import Store
 
 
@@ -31,6 +31,14 @@ def sync(gmail, store: Store, cfg: Config, log=print) -> int:
     store.add_correspondents(addrs)
     log(f"{len(addrs)} people you have emailed (their mail is protected)")
     return len(new)
+
+
+def import_json(store: Store, data: dict) -> int:
+    """Load {"messages": [...connector messages], "sent_recipients": [...]} into the store."""
+    records = [parse_connector_message(m) for m in data.get("messages", [])]
+    store.upsert_emails(records)
+    store.add_correspondents({a.lower() for a in data.get("sent_recipients", [])})
+    return len(records)
 
 
 def pending(store: Store, cfg: Config) -> list[EmailRecord]:
@@ -70,13 +78,27 @@ def classify(store: Store, cfg: Config, client_factory, limit: int | None = None
 def plan(store: Store, cfg: Config, now: datetime | None = None) -> list[Decision]:
     judgments = store.judgments(question_hash(cfg))
     correspondents = store.correspondents()
-    decisions = [
-        decide(rec, judgments[rec.id], cfg, correspondents, now)
-        for rec in store.emails()
-        if rec.id in judgments
-    ]
+    overrides = store.overrides()
+    decisions = []
+    for rec in store.emails():
+        if rec.id not in judgments:
+            continue
+        d = decide(rec, judgments[rec.id], cfg, correspondents, now)
+        if rec.id in overrides and overrides[rec.id] != d.action:
+            d.reasons.insert(0, f"you chose {overrides[rec.id]} (plan said {d.action})")
+            d.action = overrides[rec.id]
+        decisions.append(d)
     store.save_decisions(decisions)
     return decisions
+
+
+def import_decisions(store: Store, data: dict) -> tuple[int, int]:
+    """Store keep/delete choices exported from the review page. Returns (accepted, skipped)."""
+    known = store.known_ids()
+    raw = data.get("decisions", {})
+    accepted = {i: a for i, a in raw.items() if i in known and a in (KEEP, DELETE)}
+    store.set_overrides(accepted)
+    return len(accepted), len(raw) - len(accepted)
 
 
 def apply_labels(gmail, store: Store, cfg: Config, mark_suggested: bool = True, archive: bool = True) -> str:

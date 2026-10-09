@@ -33,6 +33,15 @@ def cmd_sync(args, cfg):
     sync(_gmail(args), _store(args), cfg)
 
 
+def cmd_import_json(args, cfg):
+    import json
+
+    from .pipeline import import_json
+
+    n = import_json(_store(args), json.loads(Path(args.file).read_text()))
+    print(f"Imported {n} messages from {args.file}")
+
+
 def cmd_estimate(args, cfg):
     from .judge import estimate_cost
     from .pipeline import pending
@@ -78,6 +87,16 @@ def cmd_plan(args, cfg):
     print(f"Report: {html_path}\nCSV:    {csv_path}")
 
 
+def cmd_decisions(args, cfg):
+    import json
+
+    from .pipeline import import_decisions
+
+    accepted, skipped = import_decisions(_store(args), json.loads(Path(args.file).read_text()))
+    print(f"Saved {accepted} decisions" + (f", skipped {skipped} unknown or invalid" if skipped else "")
+          + ". Run `jevclean plan` to rebuild the plan with them.")
+
+
 def cmd_apply(args, cfg):
     from .pipeline import apply_labels, trash_suggested
 
@@ -115,6 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("auth", help="connect to Gmail").set_defaults(fn=cmd_auth)
     sub.add_parser("sync", help="download message metadata/excerpts to the local cache").set_defaults(fn=cmd_sync)
+    ij = sub.add_parser("import-json", help="load messages exported via the Gmail connector (no OAuth needed)")
+    ij.add_argument("file")
+    ij.set_defaults(fn=cmd_import_json)
     sub.add_parser("estimate", help="estimate Jev cost for unjudged mail").set_defaults(fn=cmd_estimate)
 
     c = sub.add_parser("classify", help="ask Jev about each unjudged email")
@@ -124,6 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("plan", help="apply policy and write an HTML/CSV report (no Gmail changes)").set_defaults(
         fn=cmd_plan)
+
+    dc = sub.add_parser("decisions", help="load keep/delete choices exported from the review page")
+    dc.add_argument("file")
+    dc.set_defaults(fn=cmd_decisions)
 
     a = sub.add_parser("apply", help="label/archive in Gmail, or trash the reviewed suggestions")
     a.add_argument("--no-archive", action="store_true")

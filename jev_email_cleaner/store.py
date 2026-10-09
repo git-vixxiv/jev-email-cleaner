@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     id TEXT PRIMARY KEY, topic TEXT, action TEXT, archive INTEGER, reasons TEXT,
     disposable REAL, lasting_value REAL, protect REAL
 );
+CREATE TABLE IF NOT EXISTS overrides (id TEXT PRIMARY KEY, action TEXT, ts REAL);
 CREATE TABLE IF NOT EXISTS action_log (
     run_id TEXT, message_id TEXT, op TEXT, label_id TEXT, ts REAL
 );
@@ -105,6 +106,16 @@ class Store:
             d["archive"] = bool(d["archive"])
             out.append(d)
         return out
+
+    # --- your decisions from the review page ------------------------
+    def set_overrides(self, overrides: dict[str, str]) -> None:
+        now = time.time()
+        self.db.executemany("INSERT OR REPLACE INTO overrides VALUES (?,?,?)",
+                            [(i, a, now) for i, a in overrides.items()])
+        self.db.commit()
+
+    def overrides(self) -> dict[str, str]:
+        return {r[0]: r[1] for r in self.db.execute("SELECT id, action FROM overrides")}
 
     # --- undo log -----------------------------------------------------
     def log_action(self, run_id: str, message_id: str, op: str, label_id: str = "") -> None:

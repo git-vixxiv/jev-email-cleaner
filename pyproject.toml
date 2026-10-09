@@ -26,3 +26,6 @@ packages = ["jev_email_cleaner"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+jev_email_cleaner = ["assets/*"]

@@ -70,8 +70,14 @@ def _decode(data: str) -> str:
     return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", errors="replace")
 
 
+# Marketing mail pads previews with invisible joiners to hide the body from preview panes.
+_FILLER = re.compile(r"[\u034f\u200b-\u200f\u00ad\ufeff]+")
 _TAG = re.compile(r"<(script|style)[^>]*>.*?</\1>|<[^>]+>", re.S | re.I)
 _WS = re.compile(r"\s+")
+
+
+def clean_text(text: str) -> str:
+    return _WS.sub(" ", _FILLER.sub("", html.unescape(text))).strip()
 
 
 def html_to_text(markup: str) -> str:
@@ -99,7 +105,7 @@ def extract_body(payload: dict) -> tuple[str, bool]:
         elif mime == "text/html":
             rich.append(html_to_text(_decode(data)))
     text = "\n".join(plain) if plain else "\n".join(rich)
-    return _WS.sub(" ", text).strip(), has_attachment
+    return clean_text(text), has_attachment
 
 
 def parse_message(msg: dict, body_chars: int) -> EmailRecord:
@@ -113,7 +119,7 @@ def parse_message(msg: dict, body_chars: int) -> EmailRecord:
         sender_name=name,
         sender_email=addr.lower(),
         subject=headers.get("subject", ""),
-        snippet=html.unescape(msg.get("snippet", "")),
+        snippet=clean_text(msg.get("snippet", "")),
         body=body[:body_chars],
         internal_ms=int(msg.get("internalDate", 0)),
         label_ids=list(msg.get("labelIds", [])),
@@ -138,3 +144,23 @@ def unsubscribe_target(header: str) -> str:
         if t.startswith("https://"):
             return t
     return targets[0] if targets else ""
+
+
+def parse_connector_message(msg: dict) -> EmailRecord:
+    """Parse one message from the Gmail connector's search_threads output (subject + snippet, no body).
+
+    The connector exposes neither List-* headers nor attachments, so is_list_mail and
+    has_attachment are False and the attachment protection cannot fire in this mode.
+    """
+    name, addr = parseaddr(msg.get("sender", ""))
+    return EmailRecord(
+        id=msg["id"],
+        thread_id=msg.get("threadId", ""),
+        sender_name=name,
+        sender_email=addr.lower(),
+        subject=clean_text(msg.get("subject", "")),
+        snippet=clean_text(msg.get("snippet", "")),
+        body="",
+        internal_ms=int(msg.get("internalDate", 0)),
+        label_ids=list(msg.get("labelIds", [])),
+    )

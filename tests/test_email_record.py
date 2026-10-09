@@ -26,3 +26,15 @@ def test_recipients_parses_to_and_cc():
     msg = {"payload": {"headers": [{"name": "To", "value": "Ann <Ann@X.com>, bob@y.com"},
                                    {"name": "Cc", "value": "c@z.com"}]}}
     assert recipients(msg) == {"ann@x.com", "bob@y.com", "c@z.com"}
+
+
+def test_connector_message_and_filler_stripping():
+    from jev_email_cleaner.email_record import parse_connector_message
+
+    rec = parse_connector_message({
+        "id": "x1", "threadId": "t", "sender": "Promo Team <Hi@Shop.com>", "internalDate": "1771397340000",
+        "subject": "Don&#39;t miss", "snippet": "Free fonts ͏ ͏ ͏ ͏ ͏​ today", "labelIds": ["UNREAD"],
+    })
+    assert rec.sender_email == "hi@shop.com" and rec.sender_name == "Promo Team"
+    assert rec.subject == "Don't miss" and rec.snippet == "Free fonts today"
+    assert rec.unread and not rec.is_list_mail and rec.body == ""

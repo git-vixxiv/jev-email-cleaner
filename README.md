@@ -23,6 +23,8 @@ sync ──► classify ──► plan ──► apply ──► (review in Gmai
 | `plan` | Applies the deletion policy and writes `reports/plan-*.html` and `.csv`. Re-run freely after editing thresholds: no new Jev calls. | No |
 | `apply` | Adds `Jev/<Topic>` labels, archives configured topics, labels deletion candidates `Jev/Suggested-Delete`. | Yes, reversible |
 | `apply --trash` | Trashes whatever **still** carries `Jev/Suggested-Delete` in Gmail. Remove the label from anything you want to keep first. | Yes, reversible |
+| `import-json FILE` | Loads messages exported through the Gmail connector instead of `sync` (no Google OAuth). Subject + preview only, no body or List-Unsubscribe header. | No |
+| `decisions FILE` | Loads keep/delete choices exported from the review page. `plan` honors them from then on. | No |
 | `undo` | Reverses the last run (or `--run ID`): untrash, remove labels, restore Inbox. | Yes |
 
 ### What Jev decides vs. what code decides
@@ -46,6 +48,10 @@ Code owns everything else ([`policy.py`](jev_email_cleaner/policy.py)):
 - **Delete** needs high disposable-kind probability, low lasting value, and a confident `kind` answer. Weaker evidence goes to **review**.
 - Dates, ages, sender counts and read rates are computed in code. Per TypeSafe's docs Jev is unreliable at date and number comparison, so it never sees them.
 - Email text is treated as untrusted: every question tells Jev to ignore instructions inside the email, and the report HTML-escapes all content and blocks spreadsheet formula injection in the CSV.
+
+### Review page
+
+`plan` writes `reports/plan-*.html`, a single offline file. Tabs split the plan into suggested delete, review and keep, plus a sender view with unsubscribe links. Flip any row between Keep and Delete, bulk-mark filtered rows (with Undo), then **Export**. Load the file with `jevclean decisions <file>` and re-run `plan`. Choices persist in the browser per plan until exported. Press `/` or ⌘K to filter.
 
 ### Extras
 
@@ -97,6 +103,8 @@ jevclean undo                 # if anything looks wrong
 ```sh
 pytest
 ```
+
+**Status:** not yet run against the live Jev API. Every Jev answer in the test suite is scripted. The question wording and thresholds are untested until a run with a real `TYPESAFE_API_KEY`.
 
 Tests run the real TypeSafe SDK against a mock HTTP endpoint and a fake in-memory Gmail, so they need no keys and touch no mailbox.
 

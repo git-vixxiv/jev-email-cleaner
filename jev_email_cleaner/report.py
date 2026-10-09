@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import csv
-from collections import Counter, defaultdict
+import hashlib
+import json
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 from pathlib import Path
 
 from .email_record import EmailRecord, unsubscribe_target
-from .policy import DELETE, KEEP, REVIEW
+from .policy import DELETE
 
 
 @dataclass
@@ -55,67 +58,53 @@ def _safe_href(url: str) -> str:
     return escape(url, quote=True) if url.startswith(("https://", "mailto:")) else ""
 
 
-def _rows(emails, decisions, action, limit=500) -> str:
-    picked = sorted((d for d in decisions if d["action"] == action), key=lambda d: -d["disposable"])[:limit]
+ASSETS = Path(__file__).parent / "assets"
+_MSG_ID = re.compile(r"^[0-9a-zA-Z]+$")
+
+
+def gmail_url(message_id: str) -> str:
+    return f"https://mail.google.com/mail/u/0/#all/{message_id}" if _MSG_ID.match(message_id) else ""
+
+
+def build_payload(emails: dict[str, EmailRecord], decisions: list[dict], label_prefix: str) -> dict:
+    plan_id = hashlib.sha256(
+        json.dumps(sorted((d["id"], d["action"]) for d in decisions)).encode()).hexdigest()[:10]
     rows = []
-    for d in picked:
+    for d in sorted(decisions, key=lambda d: (-d["disposable"], emails[d["id"]].sender_email)):
         e = emails[d["id"]]
-        link = f"https://mail.google.com/mail/u/0/#all/{escape(e.id)}"
-        rows.append(
-            f"<tr><td>{escape(e.sender_name or e.sender_email)}<br><small>{escape(e.sender_email)}</small></td>"
-            f"<td><a href='{link}' target='_blank' rel='noopener'>{escape(e.subject or '(no subject)')}</a></td>"
-            f"<td>{escape(d['topic'])}</td><td>{e.age_days()}d</td>"
-            f"<td>{escape('; '.join(d['reasons']))}</td></tr>"
-        )
-    return "".join(rows) or "<tr><td colspan=5>None</td></tr>"
+        rows.append({
+            "id": e.id, "name": e.sender_name, "from": e.sender_email, "subject": e.subject,
+            "topic": d["topic"], "action": d["action"], "age": e.age_days(), "unread": e.unread,
+            "disposable": round(d["disposable"], 3), "value": round(d["lasting_value"], 2),
+            "reasons": d["reasons"], "url": gmail_url(e.id),
+        })
+    by_sender: dict[str, list[str]] = defaultdict(list)
+    for d in decisions:
+        by_sender[emails[d["id"]].sender_email].append(d["id"])
+    senders = [{
+        "sender": s.sender, "name": s.name, "count": s.count, "unread_rate": round(s.unread_rate, 3),
+        "delete_rate": round(s.delete_rate, 3), "unsubscribe": s.unsubscribe if _safe_href(s.unsubscribe) else "",
+        "ids": by_sender[s.sender],
+    } for s in sender_stats(emails, decisions)[:100]]
+    return {
+        "plan_id": plan_id, "generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "label_prefix": label_prefix,
+        "archive_count": sum(1 for d in decisions if d["archive"]), "emails": rows, "senders": senders,
+    }
 
 
 def render_html(emails: dict[str, EmailRecord], decisions: list[dict], label_prefix: str) -> str:
-    actions = Counter(d["action"] for d in decisions)
-    topics = Counter(d["topic"] for d in decisions)
-    senders = sender_stats(emails, decisions)[:50]
-    topic_rows = "".join(f"<tr><td>{escape(t)}</td><td>{n}</td></tr>" for t, n in topics.most_common())
-    sender_rows = "".join(
-        f"<tr><td>{escape(s.name or s.sender)}<br><small>{escape(s.sender)}</small></td><td>{s.count}</td>"
-        f"<td>{s.unread_rate:.0%}</td><td>{s.delete_rate:.0%}</td>"
-        + (f"<td><a href='{_safe_href(s.unsubscribe)}' target='_blank' rel='noopener noreferrer'>Unsubscribe</a></td>"
-           if _safe_href(s.unsubscribe) else "<td>-</td>")
-        + "</tr>"
-        for s in senders
-    ) or "<tr><td colspan=5>None</td></tr>"
-    head = "<tr><th>From</th><th>Subject</th><th>Topic</th><th>Age</th><th>Why</th></tr>"
-    return f"""<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Mailbox Cleanup Plan</title>
-<style>
-:root{{--bg:#fafaf9;--fg:#1c1917;--muted:#78716c;--line:#e7e5e4;--accent:#b91c1c;--ok:#15803d;--warn:#b45309}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#1c1917;--fg:#f5f5f4;--muted:#a8a29e;--line:#44403c;--accent:#f87171;--ok:#4ade80;--warn:#fbbf24}}}}
-body{{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0 auto;max-width:1100px;padding:24px 16px}}
-h1{{margin:0 0 4px}} h2{{margin-top:36px;border-bottom:1px solid var(--line);padding-bottom:4px}}
-.muted,small{{color:var(--muted)}} a{{color:inherit}}
-.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}}
-.card{{border:1px solid var(--line);border-radius:10px;padding:12px}} .card b{{font-size:28px;display:block}}
-.del b{{color:var(--accent)}} .rev b{{color:var(--warn)}} .keep b{{color:var(--ok)}}
-.wrap{{overflow-x:auto}} table{{border-collapse:collapse;width:100%}}
-td,th{{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}}
-</style></head><body>
-<h1>Mailbox cleanup plan</h1>
-<div class="muted">Generated {datetime.now():%Y-%m-%d %H:%M}. Nothing has changed in Gmail until you run <code>jevclean apply</code>.</div>
-<div class="cards">
-<div class="card"><b>{len(decisions)}</b>emails judged</div>
-<div class="card del"><b>{actions[DELETE]}</b>suggested for deletion</div>
-<div class="card rev"><b>{actions[REVIEW]}</b>need your review</div>
-<div class="card keep"><b>{actions[KEEP]}</b>keep</div>
-</div>
-<p class="muted">Suggested deletions are labeled <code>{escape(label_prefix)}/Suggested-Delete</code> in Gmail by
-<code>jevclean apply</code>. Remove that label from anything you want to keep, then run
-<code>jevclean apply --trash</code>. Trash stays recoverable in Gmail for 30 days.</p>
-<h2>Folders</h2><div class="wrap"><table><tr><th>Topic</th><th>Emails</th></tr>{topic_rows}</table></div>
-<h2>Unsubscribe candidates</h2>
-<p class="muted">Frequent senders you rarely read. Ranked by volume times (unread rate + delete rate).</p>
-<div class="wrap"><table><tr><th>Sender</th><th>Emails</th><th>Unread</th><th>Deletable</th><th></th></tr>{sender_rows}</table></div>
-<h2>Suggested for deletion</h2><div class="wrap"><table>{head}{_rows(emails, decisions, DELETE)}</table></div>
-<h2>Needs review</h2><div class="wrap"><table>{head}{_rows(emails, decisions, REVIEW)}</table></div>
-</body></html>"""
+    payload = json.dumps(build_payload(emails, decisions, label_prefix), ensure_ascii=False)
+    # Mail content is attacker-controlled: never let it close the <script> element.
+    payload = payload.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    page = (ASSETS / "report.html").read_text()
+    for marker, value in (
+        ("/*TOKENS*/", (ASSETS / "tokens.css").read_text()),
+        ("/*CSS*/", (ASSETS / "report.css").read_text()),
+        ("/*JS*/", (ASSETS / "report.js").read_text()),
+        ("/*DATA*/", payload),
+    ):
+        page = page.replace(marker, value, 1)
+    return page
 
 
 def write_reports(emails: dict[str, EmailRecord], decisions: list[dict], out_dir: str | Path, label_prefix: str):

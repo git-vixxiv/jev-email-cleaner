@@ -62,5 +62,22 @@ def test_end_to_end_label_review_trash_undo(tmp_path):
 
     html, csv = write_reports({e.id: e for e in store.emails()}, store.decisions(), tmp_path / "r", cfg.label_prefix)
     text = html.read_text()
-    assert "Unsubscribe candidates" in text and "https://shop.com/u" in text
+    assert '"senders": [{' in text and "https://shop.com/u" in text
     assert csv.read_text().count("\n") == 7
+
+
+def test_exported_decisions_override_the_plan(tmp_path):
+    from jev_email_cleaner.pipeline import import_decisions
+
+    cfg = Config()
+    gmail, store = mailbox(), Store(tmp_path / "db.sqlite")
+    sync(gmail, store, cfg, log=quiet)
+    classify(store, cfg, JevEndpoint().client_factory(), log=quiet)
+    assert {d.message_id: d.action for d in plan(store, cfg, NOW)}["m1"] == "delete"
+
+    accepted, skipped = import_decisions(store, {"decisions": {"m1": "keep", "m3": "delete", "nope": "keep",
+                                                              "m2": "explode"}})
+    assert (accepted, skipped) == (2, 2)
+    after = {d.message_id: d for d in plan(store, cfg, NOW)}
+    assert after["m1"].action == "keep" and after["m1"].reasons[0].startswith("you chose keep")
+    assert after["m3"].action == "delete"
