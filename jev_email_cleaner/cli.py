@@ -42,6 +42,21 @@ def cmd_import_json(args, cfg):
     print(f"Imported {n} messages from {args.file}")
 
 
+def cmd_import_mbox(args, cfg):
+    from .mbox import import_mbox
+
+    n, sent = import_mbox(_store(args), args.file, cfg.body_chars)
+    print(f"Imported {n} messages from {args.file}; scanned {sent} sent messages for people you emailed")
+
+
+def cmd_export_mbox(args, cfg):
+    from .mbox import export_mbox
+
+    counts = export_mbox(_store(args), args.file, args.out)
+    for name, n in sorted(counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:6}  {name}.mbox")
+
+
 def cmd_estimate(args, cfg):
     from .judge import estimate_cost
     from .pipeline import pending
@@ -137,6 +152,13 @@ def build_parser() -> argparse.ArgumentParser:
     ij = sub.add_parser("import-json", help="load messages exported via the Gmail connector (no OAuth needed)")
     ij.add_argument("file")
     ij.set_defaults(fn=cmd_import_json)
+    im = sub.add_parser("import-mbox", help="load a Google Takeout MBOX (full bodies, no OAuth needed)")
+    im.add_argument("file")
+    im.set_defaults(fn=cmd_import_mbox)
+    em = sub.add_parser("export-mbox", help="split a Takeout MBOX into one MBOX per folder using the plan")
+    em.add_argument("file", help="the same Takeout MBOX passed to import-mbox")
+    em.add_argument("--out", default="export", help="output directory")
+    em.set_defaults(fn=cmd_export_mbox)
     sub.add_parser("estimate", help="estimate Jev cost for unjudged mail").set_defaults(fn=cmd_estimate)
 
     c = sub.add_parser("classify", help="ask Jev about each unjudged email")
