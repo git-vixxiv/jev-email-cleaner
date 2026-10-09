@@ -59,6 +59,29 @@ Code owns everything else ([`policy.py`](jev_email_cleaner/policy.py)):
 - **Cost guard**: `classify` aborts if the estimate exceeds `--max-cost` (default $5). At the published $0.042 per million input tokens, the estimator puts 10,000 emails at about $0.60 to $0.70 (~1,600 tokens each, mostly the question set, which is resent per email). `estimate` uses a chars/4 approximation; `classify` reports actual tokens billed.
 - **Cache invalidation**: changing topics, question wording or model re-judges automatically; changing thresholds does not.
 
+## Leaving Google Workspace: Takeout in, sorted MBOX out
+
+If the goal is to move an old mailbox somewhere else, skip OAuth entirely:
+
+```sh
+# 1. takeout.google.com, signed in as the old account: deselect all, select Mail, export (.zip)
+unzip takeout-*.zip                       # gives "All mail Including Spam and Trash.mbox"
+jevclean --data data-takeout import-mbox "Takeout/Mail/All mail Including Spam and Trash.mbox"
+jevclean --data data-takeout estimate
+jevclean --data data-takeout classify
+jevclean --data data-takeout plan         # review reports/plan-*.html, export decisions if you change any
+jevclean --data data-takeout export-mbox "Takeout/Mail/All mail Including Spam and Trash.mbox" --out export
+```
+
+`export/` then holds one MBOX per topic (`Finance.mbox`, `Legal.mbox`, ...) plus `Sent.mbox`,
+`_Suggested-Delete.mbox`, `_Not-yet-judged.mbox` and `_Spam-and-Trash.mbox`. Every original
+message is copied unchanged, attachments included; nothing is dropped, so deleting means simply
+not importing `_Suggested-Delete.mbox`. Import the files you want into the new host
+(Thunderbird with ImportExportTools NG, Apple Mail, or the host's MBOX importer).
+
+Takeout mode reads full bodies, attachments and `List-Unsubscribe` headers, so every protection
+works, and sent mail is used to protect people you corresponded with.
+
 ## Setup (about 15 minutes, most of it in Google Cloud Console)
 
 1. **Python 3.11+**
