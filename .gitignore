@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Secrets and local mailbox data: never commit
+credentials.json
+token.json
+.env
+data/
+reports/
+config.yaml

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jev-email-cleaner"
+version = "0.1.0"
+description = "Categorize and clean up a Gmail mailbox with TypeSafe Jev judgments."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "typesafe-sdk>=0.7.2,<0.8",
+    "google-api-python-client>=2.100",
+    "google-auth-oauthlib>=1.2",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+jevclean = "jev_email_cleaner.cli:main"
+
+[tool.setuptools]
+packages = ["jev_email_cleaner"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,45 @@
+# Copy to config.yaml and edit. Every key is optional; omitted keys use defaults.
+
+# Gmail search applied by `jevclean sync`. Same syntax as the Gmail search box.
+sync_query: "-in:starred -in:chats"
+sync_max_messages: 2000
+# Sent mail scanned to learn who you correspond with (protects their mail).
+sent_scan_max: 1000
+
+# Characters of plain-text body sent to Jev per email. 0 = subject + snippet only.
+# Lower this if you want less mail content leaving your machine.
+body_chars: 1200
+
+# Jev model. Pin a versioned ID (e.g. jev-1.13.0) once you tune thresholds.
+model: jev-latest
+concurrency: 8
+
+# Topic folders. Each becomes a Gmail label "<label_prefix>/<Name>".
+# Description tells Jev what belongs there; be literal and specific.
+# Order matters slightly (Jev leans to earlier options) so put broad buckets last.
+label_prefix: Jev
+topics:
+  Finance: "Banking, credit cards, investments, invoices, bills, tax documents, payment receipts"
+  Legal: "Courts, attorneys, contracts, filings, legal notices, compliance"
+  Work: "Clients, colleagues, projects, business operations, vendors"
+  Shopping: "Order confirmations, shipping and delivery updates, returns, retailer accounts"
+  Travel: "Flights, hotels, car rentals, itineraries, boarding passes, loyalty programs"
+  Health: "Doctors, pharmacies, insurance claims, medical portals"
+  Social: "Social networks, community forums, event invites from platforms"
+  Newsletters: "Editorial newsletters, digests, blogs, industry news the recipient subscribed to"
+  Promotions: "Sales, discounts, coupons, product marketing, upsells"
+  Accounts & Security: "Password resets, sign-in alerts, two-factor codes, account and service notices"
+  Personal: "Friends and family, personal correspondence, personal matters"
+
+# Archive (remove from Inbox) after labeling, per topic. Never applied to protected mail.
+archive_topics: [Newsletters, Promotions, Social]
+
+# Deletion policy. Code applies these to Jev's probabilities; see policy.py.
+policy:
+  min_age_days: 30              # never suggest deleting newer mail
+  protect_threshold: 0.35       # any protective judgment above this blocks deletion
+  delete_disposable_min: 0.80   # P(email is disposable kind) needed to suggest delete
+  delete_value_max: 0.9         # lasting_value score (0-3) at or below this
+  review_disposable_min: 0.50   # weaker evidence goes to the review bucket
+  review_value_max: 1.6
+  min_confidence: 0.45          # kind-Choice confidence below this -> review, not delete
